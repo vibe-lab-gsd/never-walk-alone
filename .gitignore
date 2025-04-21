@@ -3,6 +3,6 @@
 .RData
 .Ruserdata
 
-nhts/2009/
-nhts/2017/
-nhts/2022/
+data/nhts/2009/
+data/nhts/2017/
+data/nhts/2022/
