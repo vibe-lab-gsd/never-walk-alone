@@ -1,0 +1,1061 @@
+---
+title: "Assembling and summarizing school trips"
+output:
+  html_document:
+    theme: simplex
+    toc: yes
+    toc_float:
+      collapsed: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+The purpose of this notebook is to assemble a sample of trips to school from the
+2009 and 2017 samples of National Household Travel Survey (NHTS) in the United 
+States and present some basic descriptive statistics of that combined sample.
+
+# Required packages
+
+The analysis uses the following packages:
+
+```{r, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(here)
+library(knitr)
+library(janitor)
+```
+
+# Download data
+
+At this time (March 7, 2025), public versions of NHTS data (without respondents'
+personally-identifiable information) are available to download from 
+https://nhts.ornl.gov/downloads.
+
+
+```{r, eval=FALSE}
+# 2022 data
+temp <- tempfile()
+download.file("https://nhts.ornl.gov/assets/2022/download/csv.zip",temp)
+people22 <- read_csv(unz(temp, "perv2pub.csv"))
+trip22 <- read_csv(unz(temp, "tripv2pub.csv")) 
+unlink(temp)
+
+# 2017 data
+temp <- tempfile()
+download.file("https://nhts.ornl.gov/assets/2016/download/csv.zip",temp)
+people17 <- read_csv(unz(temp, "perpub.csv"))
+trip17 <- read_csv(unz(temp, "trippub.csv"))
+unlink(temp)
+
+# 2009 data
+temp <- tempfile()
+download.file("https://nhts.ornl.gov/assets/2009/download/Ascii.zip",temp)
+people09 <- read_csv(unz(temp, file.path("Ascii","PERV2PUB.CSV")))
+trip09 <- read_csv(unz(temp, file.path("Ascii","DAYV2PUB.CSV"))) 
+unlink(temp)
+
+```
+
+Or, if you already have the data downloaded, you can load it from file.
+
+```{r, message=FALSE}
+
+# 2022 data
+people22 <- here("data",
+                 "nhts",
+                 "2022",
+                 "perv2pub.csv") |>
+  read_csv()
+
+trip22 <- here("data",
+               "nhts",
+               "2022",
+               "tripv2pub.csv") |>
+  read_csv() 
+
+# 2017 data
+people17 <- here("data",
+                 "nhts",
+                 "2017",
+                 "perpub.csv") |>
+  read_csv()
+
+trip17 <- here("data",
+               "nhts",
+               "2017",
+               "trippub.csv") |>
+  read_csv() 
+
+# 2009 data
+people09 <- here("data",
+                 "nhts",
+                 "2009",
+                 "PERV2PUB.CSV") |>
+  read_csv()
+
+trip09 <- here("data",
+               "nhts",
+               "2009",
+               "DAYV2PUB.CSV") |>
+  read_csv() 
+```
+
+
+# Combine samples
+
+We'll combine the data across the three years.
+
+## People
+
+```{r}
+people22 <- people22 |>
+  select(HOUSEID, 
+         PERSONID,
+         R_AGE,
+         R_SEX_IMP,
+         WORKER,
+         HHSIZE) |>
+  mutate(year = 2022) |>
+  rename(sex = R_SEX_IMP) 
+
+people17 <- people17 |> 
+  select(HOUSEID, 
+         PERSONID,
+         R_AGE,
+         R_SEX_IMP,
+         WORKER,
+         HHSIZE) |>
+  mutate(year = 2017) |>
+  rename(sex = R_SEX_IMP)
+
+people09 <- people09 |>
+  select(HOUSEID, 
+         PERSONID,
+         R_AGE,
+         R_SEX,
+         WORKER,
+         HHSIZE) |>
+  mutate(year = 2009) |>
+  rename(sex = R_SEX)
+
+all_people <- rbind(people09, people17) |>
+  rbind(people22) |>
+  mutate(person_hh_year = paste(PERSONID, HOUSEID, year, sep = "-")) |>
+  mutate(hh_year = paste(HOUSEID, year, sep = "-"))
+```
+
+
+## Trips
+
+The 2022 dataset does not include a density variable, so we're creating one just
+and tagging it with a value of 2022 for now. We will filter the 2022 data back 
+out before we finalize the dataset for the discrete choice model.
+
+```{r}
+trip09 <- trip09 |>
+  select(-ONTD_P15, -ONTD_P14) |>
+  mutate(year = 2009,
+         mode = case_when(TRPTRANS == "22" ~ "Bike",
+                          TRPTRANS == "23" ~ "Walk", 
+                          TRPTRANS %in% c("01", "02", "03", "04", "05")~ "Car",
+                          TRPTRANS == "11" ~ "School bus",
+                          TRPTRANS %in% c("09", "10", "12", "13", "14", 
+                                          "15", "16", "17", "18") ~ "Transit",
+                          TRUE ~ "Other"),
+         home_to_school = (WHYFROM == "01" & WHYTO == "21")) |>
+  rename(sex = R_SEX,
+         density = HBPPOPDN) |>
+  select(PERSONID,
+         HOUSEID,
+         home_to_school,
+         year,
+         R_AGE,
+         ENDTIME,
+         TRPMILES,
+         mode,
+         starts_with("ONTD_P"),
+         NUMONTRP,
+         NONHHCNT,
+         sex,
+         HHFAMINC,
+         DRVRCNT,
+         HHVEHCNT,
+         density,
+         TRPTRANS,
+         HHC_MSA)
+
+trip17 <- trip17 |>
+  mutate(year = 2017,
+         mode = case_when(TRPTRANS == "01" ~ "Walk",
+                          TRPTRANS == "02" ~ "Bike",
+                          TRPTRANS %in% c("03", "04", "05", "06") ~ "Car",
+                          TRPTRANS == "10" ~ "School bus",
+                          TRPTRANS %in% c("11", "12", "13", "14", "15", "16") ~ "Transit",
+                          TRUE ~ "Other"),
+         home_to_school = (WHYFROM %in% c("01","02") & WHYTO == "08"),
+         ONTD_P10 = as.character(ONTD_P10))|>
+  mutate(MSA = "unknown") |>
+  rename(sex = R_SEX_IMP,
+         density = OBPPOPDN) |>
+  select(PERSONID,
+         HOUSEID,
+         home_to_school,
+         year,
+         R_AGE,
+         ENDTIME,
+         TRPMILES,
+         mode,
+         starts_with("ONTD_P"),
+         NUMONTRP,
+         NONHHCNT,
+         sex,
+         HHFAMINC,
+         DRVRCNT,
+         HHVEHCNT,
+         density,
+         TRPTRANS) 
+
+trip22 <- trip22 |>
+  mutate(year = 2022,
+         mode = case_when(TRPTRANS == "20" ~ "Walk",
+                          TRPTRANS == "18" ~ "Bike",
+                          TRPTRANS %in% c("01", "02", "03", "04", "06") ~ "Car",
+                          TRPTRANS == "09" ~ "School bus",
+                          TRPTRANS %in% c("10", "11", "12", "13", "17") ~ "Transit",
+                          TRUE ~ "Other"),
+         home_to_school = (WHYFROM %in% c("01","02") & WHYTO == "06"),
+         density = 2022,
+         ONTD_P10 = as.character(ONTD_P10)) |>
+  mutate(MSA = "unknown") |>
+  rename(sex = R_SEX_IMP) |>
+  select(PERSONID,
+         HOUSEID,
+         home_to_school,
+         year,
+         R_AGE,
+         ENDTIME,
+         TRPMILES,
+         mode,
+         starts_with("ONTD_P"),
+         NUMONTRP,
+         NONHHCNT,
+         sex,
+         HHFAMINC,
+         DRVRCNT,
+         HHVEHCNT,
+         density,
+         TRPTRANS)
+         
+
+all_trips <- bind_rows(trip09, trip17, trip22)
+
+```
+
+
+# Summarize sample sizes by filter and year
+
+The criteria for including a trip in the model are:
+
+* Traveler is between the ages of 7 and 14
+* Trip qualifies as a trip to school
+    * Trip begins at home and ends at school
+    * Traveler arrives at school before 10am
+    * Trip is the first such trip of the day
+    * Trip distance is greater than zero
+* No missing data for predictor variables
+    * Density is not missing
+    * Household income is not missing
+* Trip was a reasonable walking distance (less than 1.25 miles)
+* Trip was by a mode that was likely to be unavailable to most students
+    * Trip was not by school bus
+    * Trip was not by public transit
+    * Trip was not by other modes
+    
+## Total sample size
+
+We'll start by counting the number of households, people, and trips in each 
+survey year.
+
+```{r, message=FALSE}
+all_trips <- all_trips |>
+  mutate(is_child = R_AGE > 6 & R_AGE < 15,
+         HOUSEID = as.character(HOUSEID)) 
+
+all_people <- all_people |>
+  mutate(is_child = R_AGE > 6 & R_AGE < 15)
+
+all_households <- all_people |>
+  group_by(HOUSEID, year) |>
+  summarise(has_child = sum(is_child) > 0) |>
+  ungroup()
+
+hh_summary <- all_households |>
+  group_by(year) |>
+  summarise(n = n()) |>
+  mutate(`Unit of observation` = "Households")
+
+people_summary <- all_people |>
+  group_by(year) |>
+  summarise(n = n()) |>
+  mutate(`Unit of observation` = "People")
+
+trips_summary <- all_trips |>
+  group_by(year) |>
+  summarise(n = n()) |>
+  mutate(`Unit of observation` = "Trips")
+
+full_sample <- bind_rows(hh_summary,
+                         people_summary,
+                         trips_summary) |>
+  mutate(Sample = "Full survey sample") |>
+  group_by(year) 
+
+```
+
+## Sample size of children
+
+Then we'll count the number of children in our target age range by survey year.
+
+```{r, message=FALSE}
+child_trips <- all_trips |>
+  filter(is_child) 
+
+child_people <- all_people |>
+  filter(is_child)
+
+child_hh <- all_households |>
+  filter(has_child)
+
+child_hh_summary <- child_hh |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Households")
+
+child_people_summary <- child_people |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "People")
+
+child_trips_summary <- child_trips |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Trips")
+
+child_sample <- bind_rows(child_hh_summary,
+                          child_people_summary,
+                          child_trips_summary) |>
+  mutate(Sample = "Limit to children ages 7 to 14") |>
+  group_by(year) |>
+  left_join(full_sample[c("year", "Unit of observation", "n")]) |>
+  mutate(reduction = 1-n_new/n) |>
+  select(year, n_new, `Unit of observation`, Sample, reduction) |>
+    rename(n = n_new) 
+
+```
+
+## Sample size of children who attended school
+
+Of those, how many had a school trip on the survey day?
+
+Again, a school trip is one that:
+
+* begins at home and ends at school,
+* arrives at its destination before 10am, and
+* is the first such trip of the day.
+
+```{r, message=FALSE}
+
+school_trips <- child_trips |>
+  mutate(arrival = as.numeric(ENDTIME)) |>
+  filter(home_to_school, 
+         arrival < 1000) |>
+  group_by(PERSONID, HOUSEID) |>
+  summarise_all(first)
+
+school_hhs <- school_trips |>
+  group_by(HOUSEID, year) |> 
+  summarize(n = n())
+
+school_people <- school_trips |>
+  group_by(HOUSEID, PERSONID, year) |> 
+  summarize(n = n())
+
+school_hh_summary <- school_hhs |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Households")
+
+school_person_summary <- school_people |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "People")
+
+school_trip_summary <- school_trips |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Trips")
+
+school_sample <- bind_rows(school_hh_summary,
+                          school_person_summary,
+                          school_trip_summary) |>
+  mutate(Sample = "Limit to school trips") |>
+  group_by(year) |>
+  left_join(child_sample[c("year", "Unit of observation", "n")]) |>
+  mutate(reduction = 1-n_new/n) |>
+  select(year, n_new, `Unit of observation`, Sample, reduction) |>
+    rename(n = n_new) 
+
+```
+
+Our next filter will narrow this sample to only those trips within a reasonable
+walking distance, but first, let's see what share of all trips are by school 
+bus.
+
+```{r, message=FALSE}
+mode_summary <- school_trips |>
+  filter(TRPMILES > 0) |>
+  group_by(mode) |>
+  summarize(n = n()) |>
+  ungroup() |>
+  mutate(`Percent of all school trips` = round(100*n/sum(n)))|>
+  select(mode, `Percent of all school trips`) |>
+  mutate(`Percent of all school trips` = 
+           paste0(`Percent of all school trips`, "%") )
+  
+```
+
+
+And let's break that down by whether the trip is longer or shorter than
+1.25 miles.
+
+```{r, message=FALSE}
+mode_short_summary <- school_trips |>
+  filter(TRPMILES > 0) |>
+  mutate(short = ifelse(TRPMILES < 1.25, "short", "long")) |>
+  mutate(short_year = paste0(short, year)) |>
+  group_by(short_year, mode) |>
+  summarize(n = n()) |>
+  ungroup() |>
+  group_by(short_year) |>
+  mutate(pct = round(100*n/sum(n))) |>
+  select(short_year, mode, pct) |>
+  pivot_wider(names_from = short_year, values_from = pct) |>
+  ungroup() |>
+  arrange(desc(`long2017`)) |>
+  mutate(`Percent of school trips shorter than 1.25 miles (2009)` = 
+           paste0(`short2009`, "%"),
+         `Percent of school trips shorter than 1.25 miles (2017)` = 
+           paste0(`short2017`, "%"),
+         `Percent of school trips shorter than 1.25 miles (2022)` = 
+           paste0(`short2022`, "%"),
+         `Percent of school trips longer than 1.25 miles (2009)` = 
+           paste0(`long2009`, "%"),
+         `Percent of school trips longer than 1.25 miles (2017)` = 
+           paste0(`long2017`, "%"),
+         `Percent of school trips longer than 1.25 miles (2022)` = 
+           paste0(`long2022`, "%")) |>
+  select(mode,
+         `Percent of school trips shorter than 1.25 miles (2009)`,
+         `Percent of school trips shorter than 1.25 miles (2017)`,
+         `Percent of school trips shorter than 1.25 miles (2022)`,
+         `Percent of school trips longer than 1.25 miles (2009)`,
+         `Percent of school trips longer than 1.25 miles (2017)`,
+         `Percent of school trips longer than 1.25 miles (2022)`) |>
+  left_join(mode_summary) 
+
+kable(mode_short_summary)
+```
+
+
+## Sample size of trips shorter than 1.25 miles
+
+Of those school trips, how many were within a reasonable walking distance?
+
+```{r, message=FALSE}
+short_trips <- school_trips |>
+  filter(TRPMILES < 1.25,
+         TRPMILES > 0) 
+
+short_hhs <- short_trips |>
+  group_by(HOUSEID, year) |> 
+  summarize(n = n())
+
+short_hh_summary <- short_hhs |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Households")
+
+short_trip_summary <- short_trips |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Trips")
+
+short_sample <- bind_rows(short_hh_summary,
+                          short_trip_summary) |>
+  mutate(Sample = "Limit to trips shorter than 1.25 miles") |>
+  group_by(year) |>
+  left_join(school_sample[c("year", "Unit of observation", "n")]) |>
+  mutate(reduction = 1-n_new/n) |>
+  select(year, n_new, `Unit of observation`, Sample, reduction) |>
+    rename(n = n_new) 
+
+```
+
+
+## Excluding school bus trips
+
+School bus service is not available to all students, so we will exclude trips 
+by students for whom it is an option.
+
+```{r, message=FALSE}
+no_bus_trips <- short_trips |>
+  filter(mode != "School bus")
+
+no_bus_hhs <- no_bus_trips |>
+  group_by(HOUSEID, year) |> 
+  summarize(n = n())
+
+no_bus_hh_summary <- no_bus_hhs |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Households")
+
+no_bus_trip_summary <- no_bus_trips |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Trips")
+
+no_bus_sample <- bind_rows(no_bus_hh_summary,
+                           no_bus_trip_summary) |>
+  mutate(Sample = "Exclude school bus trips") |>
+  group_by(year) |>
+  left_join(short_sample[c("year", "Unit of observation", "n")]) |>
+  mutate(reduction = 1-n_new/n) |>
+  select(year, n_new, `Unit of observation`, Sample, reduction) |>
+    rename(n = n_new)
+```
+
+## Excluding transit and other modes
+
+And we will also exclude those who used transit or other less common modes.
+
+```{r, message=FALSE}
+no_other_mode_trips <- no_bus_trips |>
+  filter(mode != "Transit",
+         mode != "Other")
+
+no_other_mode_hhs <- no_other_mode_trips |>
+  group_by(HOUSEID, year) |> 
+  summarize(n = n())
+
+no_other_mode_hh_summary <- no_other_mode_hhs |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Households")
+
+no_other_mode_trip_summary <- no_other_mode_trips |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Trips")
+
+no_other_mode_sample <- bind_rows(no_other_mode_hh_summary,
+                                  no_other_mode_trip_summary) |>
+  mutate(Sample = "Exclude trips by uncommon modes") |>
+  group_by(year) |>
+  left_join(no_bus_sample[c("year", "Unit of observation", "n")]) |>
+  mutate(reduction = 1-n_new/n) |>
+  select(year, n_new, `Unit of observation`, Sample, reduction) |>
+    rename(n = n_new)
+```
+
+
+
+## Sample size without missing data
+
+Of those walking-distance school trips, how many had data available for all 
+predictors?
+
+```{r, message=FALSE}
+non_missing_trips <- no_other_mode_trips |>
+  filter(density != 2022,
+         density > 0,
+         HHFAMINC > 0) 
+
+non_missing_hhs <- non_missing_trips |>
+  group_by(HOUSEID, year) |> 
+  summarize(n = n())
+
+non_missing_hh_summary <- non_missing_hhs |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Households")
+
+non_missing_trip_summary <- non_missing_trips |>
+  group_by(year) |>
+  summarise(n_new = n()) |>
+  mutate(`Unit of observation` = "Trips")
+
+non_missing_sample <- bind_rows(non_missing_hh_summary,
+                                non_missing_trip_summary) |>
+  mutate(Sample = "Exclude observations with missing data") |>
+  group_by(year) |>
+  left_join(no_other_mode_sample[c("year", "Unit of observation", "n")]) |>
+  mutate(reduction = 1-n_new/n) |>
+  select(year, n_new, `Unit of observation`, Sample, reduction) |>
+    rename(n = n_new)
+
+sample_trips <- non_missing_trips
+```
+
+## Full summary tables
+
+Now we can combine all that data into a single table.
+
+```{r}
+full_summary <- bind_rows(full_sample,
+                          child_sample,
+                          school_sample,
+                          short_sample,
+                          no_bus_sample,
+                          no_other_mode_sample,
+                          non_missing_sample) |>
+  pivot_wider(names_from = year, values_from = c("n", "reduction")) |>
+  replace_na(list(n_2022 = 0)) |>
+  mutate(Total = n_2009 + n_2017 + n_2022) 
+```
+
+First, let's see how the sample size changed from year to year with each
+successive filter.
+
+```{r, caption="Sample sizes by year and exclusion criteria"}
+full_summary |>
+  select(Sample,
+         `Unit of observation`,
+         n_2009,
+         n_2017,
+         n_2022,
+         Total) |>
+  rename(`2009` = n_2009,
+         `2017` = n_2017,
+         `2022` = n_2022) |>
+  kable(format.args = list(big.mark = " "))
+
+
+```
+
+And then let's see the percentage by which each successive filter reduced the 
+sample size.
+
+```{r, caption="Sample sizes by year and exclusion criteria"}
+
+full_summary |>
+  select(Sample,
+         `Unit of observation`,
+         reduction_2009,
+         reduction_2017,
+         reduction_2022) |>
+  rename(`2009` = reduction_2009,
+         `2017` = reduction_2017,
+         `2022` = reduction_2022) |>
+  filter(Sample != "Full survey sample") |>
+  replace_na(list(`2022` = 1)) |>
+  kable(format.args = list(format = "f", digits = 1))
+```
+
+
+# Assemble data on child's household members.
+
+We need information on the ages of the household members on each trip to 
+determine whether a child was accompanied by a household adult.
+
+We also need to determine whether each household includes a non-working female
+adult and/or a non-working male adult and the ages of the youngest and 
+oldest children in each household (to determine if the trip-maker has a 
+younger or older sibling).
+
+We'll reshape the person-level data into a household-level dataset with
+a column indicating the age of each person in the household.
+
+```{r}
+hh_ages <- all_people |>
+  select(hh_year, PERSONID, R_AGE) |>
+  pivot_wider(names_from = PERSONID,
+              names_prefix = "age_",
+              values_from = R_AGE)
+```
+
+And here, we'll construct a variable for whether there is a no-working parent of 
+either of two genders, and also for the ages of the oldest and youngest child
+in each household.
+
+```{r, message=FALSE}
+who_in_hh <- all_people |>
+  mutate(adult = R_AGE > 17,
+         kid_age = ifelse(R_AGE < 18, R_AGE, -2),
+         R_AGE = ifelse(R_AGE < 0, 999, R_AGE),
+         non_worker_mom = R_AGE > 17 & WORKER != "01" & sex == "02",
+         non_worker_dad = R_AGE > 17 & WORKER != "01" & sex != "02") |>
+  group_by(hh_year, HHSIZE) |>
+  summarize(num_records = n(),
+         n_adults = sum(adult),
+         non_work_mom = sum(non_worker_mom) > 0,
+         non_work_dad = sum(non_worker_dad) > 0,
+         min_age = min(R_AGE),
+         max_kid_age = max(kid_age)) |>
+  mutate(youngest_kid = ifelse(num_records < HHSIZE, 1, min_age),
+         oldest_kid = ifelse(max_kid_age > 0, max_kid_age, 1),
+         n_children = HHSIZE - n_adults) |>
+  ungroup() |>
+  filter(n_children > 0) |>
+  select(hh_year, 
+         non_work_dad,
+         non_work_mom,
+         oldest_kid, 
+         youngest_kid)
+```
+And now we'll join that data to our sample of trips data.
+
+
+```{r, message=FALSE}
+sample_trips <- sample_trips |>
+  mutate(hh_year = paste(HOUSEID, year, sep = "-")) |>
+  left_join(hh_ages) |>
+  left_join(who_in_hh)
+
+```
+
+# Construct variables
+
+We want to include the following variables:
+
+* `log_inc_k`: Income (log-transformed, continuous)
+* `veh_per_driver` :Vehicles per driver
+* `non_work_mom`: Presence of non-working adult woman in household
+* `non_work_dad`: Presence of non-working adult man in household
+* `age`: Age
+* `female`: Sex
+* `has_lil_sib`: Presence of younger child in household
+* `has_big_sib`: Presence of older child in household
+* `log_distance`: Distance
+* `log_density`: Population density of home block group
+
+And the outcome variable, `mode_ind`, which can take any of the following values:
+    
+* 18: Active mode accompanied by a household adult
+* 28: Active mode unaccompanied by a household adult
+* 17: In a car accompanied by a household adult
+* 27: In a car unaccompanied by a household adult
+
+We assume that all of the above alternatives are available for all respondents,
+so we will also create the following availability variables, and set the values
+to 1 (TRUE) for all respondents.
+
+* av_kid_car
+* av_par_car
+* av_kid_act
+* av_par_act
+
+## Predictor variables
+
+Our model(s) will include the following predictors:
+
+* Household characteristics
+  * Household income
+  * Number of vehicles per driver
+  * Presence of a non-working mother
+  * Presence of a non-working father
+* Individual characteristics
+  * Age
+  * Sex
+  * Has a younger sibling
+  * Has an older sibling
+* Trip characteristics
+  * Trip distance
+  * Population density
+
+### Construct income variable
+
+The 2009 survey recorded household income in one of 
+seventeen income categories and the 2017 survey recorded it in one of eleven 
+income categories. We converted this to a continuous variable by assigning 
+each household an income at the midpoint of its respective category. 
+2009 incomes were increased by 14 percent to adjust for
+inflation (converting them to 2017 dollars).
+
+For the 
+highest income category (greater than \$100,000 USD per year in the 2009 survey 
+and greater than \$200,000 USD per year in the 2017), we calculated the median 
+income of households in the United States with children between the ages of 
+7 and 14 and incomes above the threshold, based on microdata from the American 
+Community Survey published by IPUMS. The value assigned to the highest income 
+category based on this method was \$140,000 for the 2009 survey and \$281,360 
+for the 2017 survey. See https://github.com/vibe-lab-gsd/never-walk-alone/blob/main/code/upper-income-bin.R
+for the code used to calculate those values.
+
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(income_k = case_when(HHFAMINC == "01" & year == 2017 ~ 5,
+                              HHFAMINC == "02" & year == 2017 ~ 12.5,
+                              HHFAMINC == "03" & year == 2017 ~ 20,
+                              HHFAMINC == "04" & year == 2017 ~ 30,
+                              HHFAMINC == "05" & year == 2017 ~ 42.5,
+                              HHFAMINC == "06" & year == 2017 ~ 62.5,
+                              HHFAMINC == "07" & year == 2017 ~ 87.5,
+                              HHFAMINC == "08" & year == 2017 ~ 112.5,
+                              HHFAMINC == "09" & year == 2017 ~ 137.5,
+                              HHFAMINC == "10" & year == 2017 ~ 175,
+                              HHFAMINC == "11" & year == 2017 ~ 281.36,
+                              HHFAMINC == "01" ~ 2.5*1.14,
+                              HHFAMINC == "02" ~ 7.5*1.14,
+                              HHFAMINC == "03" ~ 12.5*1.14,
+                              HHFAMINC == "04" ~ 17.5*1.14,
+                              HHFAMINC == "05" ~ 22.5*1.14,
+                              HHFAMINC == "06" ~ 27.5*1.14,
+                              HHFAMINC == "07" ~ 32.5*1.14,
+                              HHFAMINC == "08" ~ 37.5*1.14,
+                              HHFAMINC == "09" ~ 42.5*1.14,
+                              HHFAMINC == "10" ~ 47.5*1.14,
+                              HHFAMINC == "11" ~ 52.5*1.14,
+                              HHFAMINC == "12" ~ 57.5*1.14,
+                              HHFAMINC == "13" ~ 62.5*1.14,
+                              HHFAMINC == "14" ~ 67.5*1.14,
+                              HHFAMINC == "15" ~ 72.5*1.14,
+                              HHFAMINC == "16" ~ 77.5*1.14,
+                              HHFAMINC == "17" ~ 90*1.14,
+                              HHFAMINC == "18" ~ 140*1.14,
+                              TRUE ~ -9)) |>
+  mutate(log_inc_k = log(income_k))
+```
+
+
+### Construct vehicles per driver variable
+
+Calculate the number of vehicles per driver. If there are no drivers, use a 
+value of zero.
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(veh_per_driver = ifelse(DRVRCNT == 0, 0, HHVEHCNT / DRVRCNT))
+```
+
+### Rename age variable
+
+Because why not?
+
+```{r}
+sample_trips <- sample_trips |>
+  rename(age = R_AGE)
+```
+
+### Construct female variable
+
+We're using a binary sex variable, where a value of one indicates that the
+respondent either identified herself or was identified by the 
+interviewer (imputed) as female.
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(female = ifelse(sex == "02", 1, 0))
+```
+
+### Construct non-working parent variables
+
+We're just converting the logical variable to a numeric variable so it works
+in Biogeme.
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(non_work_dad = ifelse(non_work_dad, 1, 0),
+         non_work_mom = ifelse(non_work_mom, 1, 0))
+```
+
+### Construct sibling variables
+
+Compare the child's age to the age of the oldest and youngest householdhold
+child to determine if they have an older or younger sibling.
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(has_lil_sib = ifelse(age != youngest_kid, 1, 0),
+         has_big_sib = ifelse(age != oldest_kid, 1, 0))
+```
+
+### Construct distance and density variables
+
+Log-transform distance and density.
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(log_distance = log(TRPMILES),
+         log_density = log(density))
+```
+
+### Construct year variable
+
+We just want a binary variable indicating whether the year is 2017.
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(y2017 = ifelse(year == 2017, 1, 0))
+```
+
+### Predictor variable summary
+
+Now we summarize the predictor variables.
+
+```{r, message=FALSE}
+means <- sample_trips |>
+  group_by(year) |>
+  summarise(`Income` = mean(income_k)*1000,
+            `Vehicles per driver` = mean(veh_per_driver),
+            `Presence of non-working father` = mean(non_work_dad),
+            `Presence of non-working mother` = mean(non_work_mom),
+            Age = mean(age),
+            Female = mean(female),
+            `Has a younger sibling` = mean(has_lil_sib),
+            `Has an older sibling` = mean(has_big_sib),
+            `Trip distance (miles)` = mean(TRPMILES),
+            `Population density (per sq-mi)` = mean(density)) |>
+  t() |>
+  as.data.frame() |>
+  row_to_names(1) |>
+  rownames_to_column("Variable") |>
+  rename(`2009 Mean` = `2009`,
+         `2017 Mean` = `2017`)
+
+sds <- sample_trips |>
+  group_by(year) |>
+  summarise(`Income` = sd(income_k)*1000,
+            `Vehicles per driver` = sd(veh_per_driver),
+            Age = sd(age),
+            `Trip distance (miles)` = sd(TRPMILES),
+            `Population density (per sq-mi)` = sd(density)) |>
+  t() |>
+  as.data.frame() |>
+  row_to_names(1) |>
+  rownames_to_column("Variable") |>
+  rename(`2009 Std. Dev.` = `2009`,
+         `2017 Std. Dev.` = `2017`)
+
+left_join(means, sds) |>
+  select(Variable,
+         `2009 Mean`,
+         `2009 Std. Dev.`,
+         `2017 Mean`,
+         `2017 Std. Dev.`) |>
+  kable(format.args = list(scientific = FALSE),
+        digits = 2)
+  
+```
+
+
+## Outcome variable
+
+The outcome variable needs to be numeric for Biogeme. We use the following 
+codes:
+
+* 1: Car
+* 2: Parental active escorting
+* 3: Active without parent
+
+```{r, message=FALSE}
+sample_trips <- sample_trips |>
+  mutate(with_parent = (ONTD_P1 == "01" & age_01 > 17) |
+           (ONTD_P2 == "01" & age_02 > 17) |
+           (ONTD_P3 == "01" & age_03 > 17) |
+           (ONTD_P4 == "01" & age_04 > 17) |
+           (ONTD_P5 == "01" & age_05 > 17) |
+           (ONTD_P6 == "01" & age_06 > 17) |
+           (ONTD_P7 == "01" & age_07 > 17) |
+           (ONTD_P8 == "01" & age_08 > 17) |
+           (ONTD_P9 == "01" & age_09 > 17) |
+           (ONTD_P10 == "01" & age_10 > 17) |
+           (ONTD_P11 == "01" & age_11 > 17) |
+           (ONTD_P12 == "01" & age_12 > 17) |
+           (ONTD_P13 == "01" & age_13 > 17)) |>
+  mutate(mode_ind = case_when(mode == "Car" ~ 1,
+                              with_parent & mode == "Walk" ~ 2,
+                              with_parent & mode == "Bike" ~ 2,
+                              mode == "Walk" ~ 3,
+                              mode == "Bike" ~ 3,
+                              TRUE ~ -1))
+
+sample_trips |>
+  group_by(year, mode_ind) |>
+  summarize(n = n()) |>
+  pivot_wider(names_from = mode_ind, values_from = n) |>
+  rename(Car = `1`,
+         `Parental active escorting` = `2`,
+         `Active without parent` = `3`) |>
+  kable()
+```
+
+## Availability variables
+
+Biogeme requires an availability variable. 
+We assume that all of the above alternatives are available for all respondents,
+so we will also create the following availability variables, and set the values
+to 1 (TRUE) for all respondents.
+
+* av_car
+* av_par_act
+* av_kid_act
+
+```{r}
+sample_trips <- sample_trips |>
+  mutate(av_car = 1,
+         av_par_act = 1,
+         av_kid_act = 1)
+```
+
+# Select final variable set
+
+```{r}
+sample_trips <- sample_trips |>
+  ungroup() |>
+  select(mode_ind, 
+         y2017,
+         av_car,
+         av_par_act,
+         av_kid_act,
+         log_inc_k,
+         veh_per_driver,
+         non_work_dad,
+         non_work_mom,
+         age,
+         female,
+         has_lil_sib,
+         has_big_sib,
+         log_distance,
+         log_density)
+  
+```
+
+# Write csv files
+
+We'll save a file with the full pooled sample and also a separate sample for 
+each year.
+
+```{r}
+write_csv(sample_trips,
+          here("data",
+               "model-input",
+               "both-years.csv"))
+
+write_csv(sample_trips[sample_trips$y2017==0,],
+          here("data",
+               "model-input",
+               "year2009.csv"))
+
+write_csv(sample_trips[sample_trips$y2017==1,],
+          here("data",
+               "model-input",
+               "year2017.csv"))
+
+```
+
