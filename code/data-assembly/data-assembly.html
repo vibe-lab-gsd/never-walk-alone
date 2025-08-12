@@ -1586,7 +1586,7 @@ trip09 &lt;- here(&quot;data&quot;,
          WORKER,
          HHSIZE) |&gt;
   mutate(year = 2022) |&gt;
-  rename(sex = R_SEX_IMP)
+  rename(sex = R_SEX_IMP) 
 
 people17 &lt;- people17 |&gt; 
   select(HOUSEID, 
@@ -1616,9 +1616,9 @@ all_people &lt;- rbind(people09, people17) |&gt;
 <div id="trips" class="section level2">
 <h2>Trips</h2>
 <p>The 2022 dataset does not include a density variable, so we’re
-creating one just and tagging it with a value of 2022 for now. We will
-filter the 2022 data back out before we finalize the dataset for the
-discrete choice model.</p>
+creating one and tagging it with a value of 2022 for now. We will filter
+the 2022 data back out before we finalize the dataset for the discrete
+choice model.</p>
 <pre class="r"><code>trip09 &lt;- trip09 |&gt;
   select(-ONTD_P15, -ONTD_P14) |&gt;
   mutate(year = 2009,
@@ -1648,7 +1648,8 @@ discrete choice model.</p>
          DRVRCNT,
          HHVEHCNT,
          density,
-         TRPTRANS)
+         TRPTRANS,
+         HHC_MSA)
 
 trip17 &lt;- trip17 |&gt;
   mutate(year = 2017,
@@ -1660,6 +1661,7 @@ trip17 &lt;- trip17 |&gt;
                           TRUE ~ &quot;Other&quot;),
          home_to_school = (WHYFROM %in% c(&quot;01&quot;,&quot;02&quot;) &amp; WHYTO == &quot;08&quot;),
          ONTD_P10 = as.character(ONTD_P10))|&gt;
+  mutate(MSA = &quot;unknown&quot;) |&gt;
   rename(sex = R_SEX_IMP,
          density = OBPPOPDN) |&gt;
   select(PERSONID,
@@ -1691,6 +1693,7 @@ trip22 &lt;- trip22 |&gt;
          home_to_school = (WHYFROM %in% c(&quot;01&quot;,&quot;02&quot;) &amp; WHYTO == &quot;06&quot;),
          density = 2022,
          ONTD_P10 = as.character(ONTD_P10)) |&gt;
+  mutate(MSA = &quot;unknown&quot;) |&gt;
   rename(sex = R_SEX_IMP) |&gt;
   select(PERSONID,
          HOUSEID,
@@ -1731,7 +1734,7 @@ all_trips &lt;- bind_rows(trip09, trip17, trip22)</code></pre>
 <li>Density is not missing</li>
 <li>Household income is not missing</li>
 </ul></li>
-<li>Trip was a reasonable walking distance (less than 1.25 miles)</li>
+<li>Trip was a reasonable walking distance (less than 1 mile)</li>
 <li>Trip was by a mode that was likely to be unavailable to most
 students
 <ul>
@@ -1876,10 +1879,10 @@ trips are by school bus.</p>
   mutate(`Percent of all school trips` = 
            paste0(`Percent of all school trips`, &quot;%&quot;) )</code></pre>
 <p>And let’s break that down by whether the trip is longer or shorter
-than 1.25 miles.</p>
+than 1 mile.</p>
 <pre class="r"><code>mode_short_summary &lt;- school_trips |&gt;
   filter(TRPMILES &gt; 0) |&gt;
-  mutate(short = ifelse(TRPMILES &lt; 1.25, &quot;short&quot;, &quot;long&quot;)) |&gt;
+  mutate(short = ifelse(TRPMILES &lt; 1, &quot;short&quot;, &quot;long&quot;)) |&gt;
   mutate(short_year = paste0(short, year)) |&gt;
   group_by(short_year, mode) |&gt;
   summarize(n = n()) |&gt;
@@ -1890,79 +1893,83 @@ than 1.25 miles.</p>
   pivot_wider(names_from = short_year, values_from = pct) |&gt;
   ungroup() |&gt;
   arrange(desc(`long2017`)) |&gt;
-  mutate(`Percent of school trips shorter than 1.25 miles (2009)` = 
+  mutate(`Percent of school trips shorter than 1 mile (2009)` = 
            paste0(`short2009`, &quot;%&quot;),
-         `Percent of school trips shorter than 1.25 miles (2017)` = 
+         `Percent of school trips shorter than 1 mile (2017)` = 
            paste0(`short2017`, &quot;%&quot;),
-         `Percent of school trips shorter than 1.25 miles (2022)` = 
+         `Percent of school trips shorter than 1 mile (2022)` = 
            paste0(`short2022`, &quot;%&quot;),
-         `Percent of school trips longer than 1.25 miles (2009)` = 
+         `Percent of school trips longer than 1 mile (2009)` = 
            paste0(`long2009`, &quot;%&quot;),
-         `Percent of school trips longer than 1.25 miles (2017)` = 
+         `Percent of school trips longer than 1 mile (2017)` = 
            paste0(`long2017`, &quot;%&quot;),
-         `Percent of school trips longer than 1.25 miles (2022)` = 
+         `Percent of school trips longer than 1 mile (2022)` = 
            paste0(`long2022`, &quot;%&quot;)) |&gt;
   select(mode,
-         `Percent of school trips shorter than 1.25 miles (2009)`,
-         `Percent of school trips shorter than 1.25 miles (2017)`,
-         `Percent of school trips shorter than 1.25 miles (2022)`,
-         `Percent of school trips longer than 1.25 miles (2009)`,
-         `Percent of school trips longer than 1.25 miles (2017)`,
-         `Percent of school trips longer than 1.25 miles (2022)`) |&gt;
+         `Percent of school trips shorter than 1 mile (2009)`,
+         `Percent of school trips shorter than 1 mile (2017)`,
+         `Percent of school trips shorter than 1 mile (2022)`,
+         `Percent of school trips longer than 1 mile (2009)`,
+         `Percent of school trips longer than 1 mile (2017)`,
+         `Percent of school trips longer than 1 mile (2022)`) |&gt;
   left_join(mode_summary) 
 
 kable(mode_short_summary)</code></pre>
 <table style="width:100%;">
 <colgroup>
 <col width="3%" />
-<col width="15%" />
-<col width="15%" />
-<col width="15%" />
 <col width="14%" />
 <col width="14%" />
 <col width="14%" />
-<col width="7%" />
+<col width="14%" />
+<col width="14%" />
+<col width="14%" />
+<col width="8%" />
 </colgroup>
 <thead>
 <tr class="header">
 <th align="left">mode</th>
-<th align="left">Percent of school trips shorter than 1.25 miles
-(2009)</th>
-<th align="left">Percent of school trips shorter than 1.25 miles
-(2017)</th>
-<th align="left">Percent of school trips shorter than 1.25 miles
-(2022)</th>
-<th align="left">Percent of school trips longer than 1.25 miles
-(2009)</th>
-<th align="left">Percent of school trips longer than 1.25 miles
-(2017)</th>
-<th align="left">Percent of school trips longer than 1.25 miles
-(2022)</th>
+<th align="left">Percent of school trips shorter than 1 mile (2009)</th>
+<th align="left">Percent of school trips shorter than 1 mile (2017)</th>
+<th align="left">Percent of school trips shorter than 1 mile (2022)</th>
+<th align="left">Percent of school trips longer than 1 mile (2009)</th>
+<th align="left">Percent of school trips longer than 1 mile (2017)</th>
+<th align="left">Percent of school trips longer than 1 mile (2022)</th>
 <th align="left">Percent of all school trips</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td align="left">Car</td>
-<td align="left">53%</td>
-<td align="left">55%</td>
+<td align="left">43%</td>
 <td align="left">52%</td>
-<td align="left">54%</td>
-<td align="left">60%</td>
-<td align="left">59%</td>
+<td align="left">53%</td>
+<td align="left">56%</td>
+<td align="left">61%</td>
+<td align="left">58%</td>
 <td align="left">56%</td>
 </tr>
 <tr class="even">
 <td align="left">School bus</td>
-<td align="left">14%</td>
-<td align="left">12%</td>
-<td align="left">12%</td>
-<td align="left">44%</td>
-<td align="left">37%</td>
+<td align="left">10%</td>
+<td align="left">10%</td>
+<td align="left">9%</td>
+<td align="left">40%</td>
+<td align="left">36%</td>
 <td align="left">38%</td>
 <td align="left">33%</td>
 </tr>
 <tr class="odd">
+<td align="left">Bike</td>
+<td align="left">4%</td>
+<td align="left">6%</td>
+<td align="left">6%</td>
+<td align="left">1%</td>
+<td align="left">1%</td>
+<td align="left">2%</td>
+<td align="left">2%</td>
+</tr>
+<tr class="even">
 <td align="left">Transit</td>
 <td align="left">0%</td>
 <td align="left">0%</td>
@@ -1972,29 +1979,19 @@ kable(mode_short_summary)</code></pre>
 <td align="left">0%</td>
 <td align="left">1%</td>
 </tr>
-<tr class="even">
-<td align="left">Walk</td>
-<td align="left">28%</td>
-<td align="left">25%</td>
-<td align="left">28%</td>
-<td align="left">1%</td>
-<td align="left">1%</td>
-<td align="left">1%</td>
-<td align="left">8%</td>
-</tr>
 <tr class="odd">
-<td align="left">Bike</td>
-<td align="left">4%</td>
-<td align="left">6%</td>
-<td align="left">7%</td>
-<td align="left">0%</td>
-<td align="left">0%</td>
+<td align="left">Walk</td>
+<td align="left">43%</td>
+<td align="left">31%</td>
+<td align="left">31%</td>
+<td align="left">2%</td>
 <td align="left">1%</td>
 <td align="left">2%</td>
+<td align="left">8%</td>
 </tr>
 <tr class="even">
 <td align="left">Other</td>
-<td align="left">1%</td>
+<td align="left">0%</td>
 <td align="left">1%</td>
 <td align="left">1%</td>
 <td align="left">1%</td>
@@ -2005,12 +2002,12 @@ kable(mode_short_summary)</code></pre>
 </tbody>
 </table>
 </div>
-<div id="sample-size-of-trips-shorter-than-1.25-miles" class="section level2">
-<h2>Sample size of trips shorter than 1.25 miles</h2>
+<div id="sample-size-of-trips-shorter-than-1-mile" class="section level2">
+<h2>Sample size of trips shorter than 1 mile</h2>
 <p>Of those school trips, how many were within a reasonable walking
 distance?</p>
 <pre class="r"><code>short_trips &lt;- school_trips |&gt;
-  filter(TRPMILES &lt; 1.25,
+  filter(TRPMILES &lt; 1,
          TRPMILES &gt; 0) 
 
 short_hhs &lt;- short_trips |&gt;
@@ -2029,7 +2026,7 @@ short_trip_summary &lt;- short_trips |&gt;
 
 short_sample &lt;- bind_rows(short_hh_summary,
                           short_trip_summary) |&gt;
-  mutate(Sample = &quot;Limit to trips shorter than 1.25 miles&quot;) |&gt;
+  mutate(Sample = &quot;Limit to trips shorter than 1 mile&quot;) |&gt;
   group_by(year) |&gt;
   left_join(school_sample[c(&quot;year&quot;, &quot;Unit of observation&quot;, &quot;n&quot;)]) |&gt;
   mutate(reduction = 1-n_new/n) |&gt;
@@ -2250,68 +2247,68 @@ each successive filter.</p>
 <td align="right">20 591</td>
 </tr>
 <tr class="even">
-<td align="left">Limit to trips shorter than 1.25 miles</td>
+<td align="left">Limit to trips shorter than 1 mile</td>
 <td align="left">Households</td>
-<td align="right">2 667</td>
-<td align="right">1 924</td>
-<td align="right">88</td>
-<td align="right">4 679</td>
-</tr>
-<tr class="odd">
-<td align="left">Limit to trips shorter than 1.25 miles</td>
-<td align="left">Trips</td>
-<td align="right">3 495</td>
-<td align="right">2 431</td>
-<td align="right">120</td>
-<td align="right">6 046</td>
-</tr>
-<tr class="even">
-<td align="left">Exclude school bus trips</td>
-<td align="left">Households</td>
-<td align="right">2 294</td>
-<td align="right">1 702</td>
-<td align="right">77</td>
-<td align="right">4 073</td>
-</tr>
-<tr class="odd">
-<td align="left">Exclude school bus trips</td>
-<td align="left">Trips</td>
-<td align="right">2 990</td>
-<td align="right">2 133</td>
-<td align="right">106</td>
-<td align="right">5 229</td>
-</tr>
-<tr class="even">
-<td align="left">Exclude trips by uncommon modes</td>
-<td align="left">Households</td>
-<td align="right">2 264</td>
-<td align="right">1 682</td>
+<td align="right">1 586</td>
+<td align="right">1 500</td>
 <td align="right">76</td>
-<td align="right">4 022</td>
+<td align="right">3 162</td>
+</tr>
+<tr class="odd">
+<td align="left">Limit to trips shorter than 1 mile</td>
+<td align="left">Trips</td>
+<td align="right">2 050</td>
+<td align="right">1 878</td>
+<td align="right">103</td>
+<td align="right">4 031</td>
+</tr>
+<tr class="even">
+<td align="left">Exclude school bus trips</td>
+<td align="left">Households</td>
+<td align="right">1 429</td>
+<td align="right">1 361</td>
+<td align="right">69</td>
+<td align="right">2 859</td>
+</tr>
+<tr class="odd">
+<td align="left">Exclude school bus trips</td>
+<td align="left">Trips</td>
+<td align="right">1 850</td>
+<td align="right">1 698</td>
+<td align="right">94</td>
+<td align="right">3 642</td>
+</tr>
+<tr class="even">
+<td align="left">Exclude trips by uncommon modes</td>
+<td align="left">Households</td>
+<td align="right">1 416</td>
+<td align="right">1 345</td>
+<td align="right">68</td>
+<td align="right">2 829</td>
 </tr>
 <tr class="odd">
 <td align="left">Exclude trips by uncommon modes</td>
 <td align="left">Trips</td>
-<td align="right">2 951</td>
-<td align="right">2 109</td>
-<td align="right">105</td>
-<td align="right">5 165</td>
+<td align="right">1 835</td>
+<td align="right">1 679</td>
+<td align="right">93</td>
+<td align="right">3 607</td>
 </tr>
 <tr class="even">
 <td align="left">Exclude observations with missing data</td>
 <td align="left">Households</td>
-<td align="right">2 170</td>
-<td align="right">1 656</td>
+<td align="right">1 364</td>
+<td align="right">1 324</td>
 <td align="right">0</td>
-<td align="right">3 826</td>
+<td align="right">2 688</td>
 </tr>
 <tr class="odd">
 <td align="left">Exclude observations with missing data</td>
 <td align="left">Trips</td>
-<td align="right">2 834</td>
-<td align="right">2 076</td>
+<td align="right">1 774</td>
+<td align="right">1 652</td>
 <td align="right">0</td>
-<td align="right">4 910</td>
+<td align="right">3 426</td>
 </tr>
 </tbody>
 </table>
@@ -2333,9 +2330,9 @@ reduced the sample size.</p>
 <colgroup>
 <col width="52%" />
 <col width="26%" />
-<col width="6%" />
-<col width="6%" />
 <col width="8%" />
+<col width="6%" />
+<col width="6%" />
 </colgroup>
 <thead>
 <tr class="header">
@@ -2350,100 +2347,100 @@ reduced the sample size.</p>
 <tr class="odd">
 <td align="left">Limit to children ages 7 to 14</td>
 <td align="left">Households</td>
-<td align="right">0.87</td>
+<td align="right">0.871</td>
 <td align="right">0.89</td>
-<td align="right">0.864</td>
+<td align="right">0.86</td>
 </tr>
 <tr class="even">
 <td align="left">Limit to children ages 7 to 14</td>
 <td align="left">People</td>
-<td align="right">0.91</td>
+<td align="right">0.909</td>
 <td align="right">0.92</td>
-<td align="right">0.904</td>
+<td align="right">0.90</td>
 </tr>
 <tr class="odd">
 <td align="left">Limit to children ages 7 to 14</td>
 <td align="left">Trips</td>
-<td align="right">0.92</td>
+<td align="right">0.923</td>
 <td align="right">0.94</td>
-<td align="right">0.919</td>
+<td align="right">0.92</td>
 </tr>
 <tr class="even">
 <td align="left">Limit to school trips</td>
 <td align="left">Households</td>
-<td align="right">0.57</td>
+<td align="right">0.570</td>
 <td align="right">0.55</td>
-<td align="right">0.682</td>
+<td align="right">0.68</td>
 </tr>
 <tr class="odd">
 <td align="left">Limit to school trips</td>
 <td align="left">People</td>
-<td align="right">0.59</td>
+<td align="right">0.591</td>
 <td align="right">0.58</td>
-<td align="right">0.695</td>
+<td align="right">0.69</td>
 </tr>
 <tr class="even">
 <td align="left">Limit to school trips</td>
 <td align="left">Trips</td>
-<td align="right">0.87</td>
+<td align="right">0.873</td>
 <td align="right">0.85</td>
-<td align="right">0.804</td>
+<td align="right">0.80</td>
 </tr>
 <tr class="odd">
-<td align="left">Limit to trips shorter than 1.25 miles</td>
+<td align="left">Limit to trips shorter than 1 mile</td>
 <td align="left">Households</td>
-<td align="right">0.68</td>
-<td align="right">0.70</td>
-<td align="right">0.743</td>
+<td align="right">0.810</td>
+<td align="right">0.77</td>
+<td align="right">0.78</td>
 </tr>
 <tr class="even">
-<td align="left">Limit to trips shorter than 1.25 miles</td>
+<td align="left">Limit to trips shorter than 1 mile</td>
 <td align="left">Trips</td>
-<td align="right">0.69</td>
-<td align="right">0.72</td>
-<td align="right">0.758</td>
+<td align="right">0.821</td>
+<td align="right">0.78</td>
+<td align="right">0.79</td>
 </tr>
 <tr class="odd">
 <td align="left">Exclude school bus trips</td>
 <td align="left">Households</td>
-<td align="right">0.14</td>
-<td align="right">0.12</td>
-<td align="right">0.125</td>
+<td align="right">0.099</td>
+<td align="right">0.09</td>
+<td align="right">0.09</td>
 </tr>
 <tr class="even">
 <td align="left">Exclude school bus trips</td>
 <td align="left">Trips</td>
-<td align="right">0.14</td>
-<td align="right">0.12</td>
-<td align="right">0.117</td>
+<td align="right">0.098</td>
+<td align="right">0.10</td>
+<td align="right">0.09</td>
 </tr>
 <tr class="odd">
 <td align="left">Exclude trips by uncommon modes</td>
 <td align="left">Households</td>
-<td align="right">0.01</td>
-<td align="right">0.01</td>
-<td align="right">0.013</td>
-</tr>
-<tr class="even">
-<td align="left">Exclude trips by uncommon modes</td>
-<td align="left">Trips</td>
-<td align="right">0.01</td>
-<td align="right">0.01</td>
 <td align="right">0.009</td>
+<td align="right">0.01</td>
+<td align="right">0.01</td>
+</tr>
+<tr class="even">
+<td align="left">Exclude trips by uncommon modes</td>
+<td align="left">Trips</td>
+<td align="right">0.008</td>
+<td align="right">0.01</td>
+<td align="right">0.01</td>
 </tr>
 <tr class="odd">
 <td align="left">Exclude observations with missing data</td>
 <td align="left">Households</td>
-<td align="right">0.04</td>
+<td align="right">0.037</td>
 <td align="right">0.02</td>
-<td align="right">1.000</td>
+<td align="right">1.00</td>
 </tr>
 <tr class="even">
 <td align="left">Exclude observations with missing data</td>
 <td align="left">Trips</td>
-<td align="right">0.04</td>
+<td align="right">0.033</td>
 <td align="right">0.02</td>
-<td align="right">1.000</td>
+<td align="right">1.00</td>
 </tr>
 </tbody>
 </table>
@@ -2722,73 +2719,73 @@ left_join(means, sds) |&gt;
 <tbody>
 <tr class="odd">
 <td align="left">Income</td>
-<td align="right">88072.44</td>
-<td align="right">52287.09</td>
-<td align="right">101503.37</td>
-<td align="right">78749.90</td>
+<td align="right">83247.63</td>
+<td align="right">52659.83</td>
+<td align="right">100735.64</td>
+<td align="right">78152.27</td>
 </tr>
 <tr class="even">
 <td align="left">Vehicles per driver</td>
-<td align="right">1.10</td>
-<td align="right">0.44</td>
+<td align="right">1.08</td>
+<td align="right">0.46</td>
 <td align="right">1.09</td>
-<td align="right">0.52</td>
+<td align="right">0.54</td>
 </tr>
 <tr class="odd">
 <td align="left">Presence of non-working father</td>
-<td align="right">0.11</td>
-<td align="right">NA</td>
 <td align="right">0.12</td>
+<td align="right">NA</td>
+<td align="right">0.11</td>
 <td align="right">NA</td>
 </tr>
 <tr class="even">
 <td align="left">Presence of non-working mother</td>
-<td align="right">0.37</td>
+<td align="right">0.39</td>
 <td align="right">NA</td>
 <td align="right">0.36</td>
 <td align="right">NA</td>
 </tr>
 <tr class="odd">
 <td align="left">Age</td>
-<td align="right">10.16</td>
-<td align="right">2.22</td>
-<td align="right">9.96</td>
-<td align="right">2.11</td>
+<td align="right">10.03</td>
+<td align="right">2.16</td>
+<td align="right">9.89</td>
+<td align="right">2.07</td>
 </tr>
 <tr class="even">
 <td align="left">Female</td>
-<td align="right">0.48</td>
+<td align="right">0.49</td>
 <td align="right">NA</td>
 <td align="right">0.47</td>
 <td align="right">NA</td>
 </tr>
 <tr class="odd">
 <td align="left">Has a younger sibling</td>
-<td align="right">0.59</td>
+<td align="right">0.60</td>
 <td align="right">NA</td>
 <td align="right">0.48</td>
 <td align="right">NA</td>
 </tr>
 <tr class="even">
 <td align="left">Has an older sibling</td>
-<td align="right">0.47</td>
+<td align="right">0.49</td>
 <td align="right">NA</td>
 <td align="right">0.44</td>
 <td align="right">NA</td>
 </tr>
 <tr class="odd">
 <td align="left">Trip distance (miles)</td>
-<td align="right">0.64</td>
-<td align="right">0.33</td>
-<td align="right">0.69</td>
-<td align="right">0.31</td>
+<td align="right">0.42</td>
+<td align="right">0.21</td>
+<td align="right">0.58</td>
+<td align="right">0.24</td>
 </tr>
 <tr class="even">
 <td align="left">Population density (per sq-mi)</td>
-<td align="right">5896.95</td>
-<td align="right">6137.04</td>
-<td align="right">5761.25</td>
-<td align="right">5643.94</td>
+<td align="right">6314.94</td>
+<td align="right">6450.70</td>
+<td align="right">5883.75</td>
+<td align="right">5797.29</td>
 </tr>
 </tbody>
 </table>
@@ -2844,15 +2841,15 @@ sample_trips |&gt;
 <tbody>
 <tr class="odd">
 <td align="right">2009</td>
-<td align="right">1776</td>
-<td align="right">39</td>
-<td align="right">1019</td>
+<td align="right">856</td>
+<td align="right">38</td>
+<td align="right">880</td>
 </tr>
 <tr class="even">
 <td align="right">2017</td>
-<td align="right">1326</td>
-<td align="right">272</td>
-<td align="right">478</td>
+<td align="right">967</td>
+<td align="right">256</td>
+<td align="right">429</td>
 </tr>
 </tbody>
 </table>

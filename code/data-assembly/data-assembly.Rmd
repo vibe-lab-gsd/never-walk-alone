@@ -151,7 +151,7 @@ all_people <- rbind(people09, people17) |>
 
 ## Trips
 
-The 2022 dataset does not include a density variable, so we're creating one just
+The 2022 dataset does not include a density variable, so we're creating one
 and tagging it with a value of 2022 for now. We will filter the 2022 data back 
 out before we finalize the dataset for the discrete choice model.
 
@@ -269,7 +269,7 @@ The criteria for including a trip in the model are:
 * No missing data for predictor variables
     * Density is not missing
     * Household income is not missing
-* Trip was a reasonable walking distance (less than 1.25 miles)
+* Trip was a reasonable walking distance (less than 1 mile)
 * Trip was by a mode that was likely to be unavailable to most students
     * Trip was not by school bus
     * Trip was not by public transit
@@ -430,12 +430,12 @@ mode_summary <- school_trips |>
 
 
 And let's break that down by whether the trip is longer or shorter than
-1.25 miles.
+1 mile.
 
 ```{r, message=FALSE}
 mode_short_summary <- school_trips |>
   filter(TRPMILES > 0) |>
-  mutate(short = ifelse(TRPMILES < 1.25, "short", "long")) |>
+  mutate(short = ifelse(TRPMILES < 1, "short", "long")) |>
   mutate(short_year = paste0(short, year)) |>
   group_by(short_year, mode) |>
   summarize(n = n()) |>
@@ -446,38 +446,38 @@ mode_short_summary <- school_trips |>
   pivot_wider(names_from = short_year, values_from = pct) |>
   ungroup() |>
   arrange(desc(`long2017`)) |>
-  mutate(`Percent of school trips shorter than 1.25 miles (2009)` = 
+  mutate(`Percent of school trips shorter than 1 mile (2009)` = 
            paste0(`short2009`, "%"),
-         `Percent of school trips shorter than 1.25 miles (2017)` = 
+         `Percent of school trips shorter than 1 mile (2017)` = 
            paste0(`short2017`, "%"),
-         `Percent of school trips shorter than 1.25 miles (2022)` = 
+         `Percent of school trips shorter than 1 mile (2022)` = 
            paste0(`short2022`, "%"),
-         `Percent of school trips longer than 1.25 miles (2009)` = 
+         `Percent of school trips longer than 1 mile (2009)` = 
            paste0(`long2009`, "%"),
-         `Percent of school trips longer than 1.25 miles (2017)` = 
+         `Percent of school trips longer than 1 mile (2017)` = 
            paste0(`long2017`, "%"),
-         `Percent of school trips longer than 1.25 miles (2022)` = 
+         `Percent of school trips longer than 1 mile (2022)` = 
            paste0(`long2022`, "%")) |>
   select(mode,
-         `Percent of school trips shorter than 1.25 miles (2009)`,
-         `Percent of school trips shorter than 1.25 miles (2017)`,
-         `Percent of school trips shorter than 1.25 miles (2022)`,
-         `Percent of school trips longer than 1.25 miles (2009)`,
-         `Percent of school trips longer than 1.25 miles (2017)`,
-         `Percent of school trips longer than 1.25 miles (2022)`) |>
+         `Percent of school trips shorter than 1 mile (2009)`,
+         `Percent of school trips shorter than 1 mile (2017)`,
+         `Percent of school trips shorter than 1 mile (2022)`,
+         `Percent of school trips longer than 1 mile (2009)`,
+         `Percent of school trips longer than 1 mile (2017)`,
+         `Percent of school trips longer than 1 mile (2022)`) |>
   left_join(mode_summary) 
 
 kable(mode_short_summary)
 ```
 
 
-## Sample size of trips shorter than 1.25 miles
+## Sample size of trips shorter than 1 mile
 
 Of those school trips, how many were within a reasonable walking distance?
 
 ```{r, message=FALSE}
 short_trips <- school_trips |>
-  filter(TRPMILES < 1.25,
+  filter(TRPMILES < 1,
          TRPMILES > 0) 
 
 short_hhs <- short_trips |>
@@ -496,7 +496,7 @@ short_trip_summary <- short_trips |>
 
 short_sample <- bind_rows(short_hh_summary,
                           short_trip_summary) |>
-  mutate(Sample = "Limit to trips shorter than 1.25 miles") |>
+  mutate(Sample = "Limit to trips shorter than 1 mile") |>
   group_by(year) |>
   left_join(school_sample[c("year", "Unit of observation", "n")]) |>
   mutate(reduction = 1-n_new/n) |>
