@@ -6,3 +6,5 @@
 data/nhts/2009/
 data/nhts/2017/
 data/nhts/2022/
+
+*.Rproj
