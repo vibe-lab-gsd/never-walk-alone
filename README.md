@@ -5,6 +5,6 @@ of Transport and Health.
 
 ### Authors
 
-Carole Turley Voulgarys
+Carole Turley Voulgaris
 Gregory Macfarlane
 Anders Fjendbo Jensen
